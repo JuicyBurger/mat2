@@ -24,7 +24,14 @@ def __load_all_parsers():
     """ Loads every parser in a dynamic way """
     current_dir = os.path.dirname(__file__)
     for fname in glob.glob(os.path.join(current_dir, '*.py')):
-        if fname.endswith(('abstract.py', '__init__.py', 'exiftool.py')):
+        # Skip non-parser helpers (pdf Info stack rewriter is not a cleaner).
+        if fname.endswith((
+            'abstract.py',
+            '__init__.py',
+            'exiftool.py',
+            'pdf_stack.py',
+            'rewrite_stack.py',
+        )):
             continue
         basename = os.path.basename(fname)
         name, _ = os.path.splitext(basename)

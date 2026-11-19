@@ -1,0 +1,4 @@
+# Extra dependency for rewrite_stack.py / pdf_stack.py (Info dict copy & inject).
+# Install into the mat2 conda env:
+#   /home/okejob/miniconda3/envs/mat2/bin/pip install -r requirements-stack.txt
+pypdf>=5.0
