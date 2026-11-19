@@ -89,7 +89,10 @@ def extract_info_stack(pdf_path: str) -> dict[str, Any]:
 
 
 def to_pdf_date(value: Any, *, assume_tz: str | None = None) -> str:
-    """Convert ISO-8601 / Unix timestamps into ``D:YYYYMMDDHHmmSS+HH'mm'``.
+    """Convert ISO-8601 / Unix timestamps into a PDF date string.
+
+    UTC times use the compact ``D:YYYYMMDDHHmmSSZ`` form (no ``+00'00'``).
+    Non-UTC offsets keep ``D:YYYYMMDDHHmmSS+HH'mm'`` / ``-HH'mm'``.
 
     Values that already look like PDF dates are returned unchanged (after a
     light normalization of the timezone suffix). Non-date-like strings are
@@ -140,12 +143,16 @@ def _normalize_existing_pdf_date(text: str) -> str:
     match = _PDF_DATE_RE.match(text)
     if not match:
         return text
-    # Already a PDF date; keep body, normalize tz apostrophes if present.
     tz = match.group("tz")
-    if not tz or tz in ("Z", "z"):
-        return text if tz not in ("Z", "z") else text[:-1] + "+00'00'"
-    # Ensure +HH'mm' form.
+    if not tz:
+        return text
+    if tz in ("Z", "z"):
+        # Keep compact UTC marker; do not expand to +00'00'.
+        return text[:-1] + "Z" if tz == "z" else text
+    # Collapse +00'00' / -00'00' to Z; otherwise normalize apostrophes.
     cleaned = tz.replace("'", "")
+    if len(cleaned) == 5 and cleaned[0] in "+-" and cleaned[1:] == "0000":
+        return text[: match.start("tz")] + "Z"
     if len(cleaned) == 5 and cleaned[0] in "+-":
         return text[: match.start("tz")] + f"{cleaned[0]}{cleaned[1:3]}'{cleaned[3:5]}'"
     return text
@@ -158,15 +165,18 @@ def _format_pdf_date(dt: datetime) -> str:
     if offset is None:
         offset = timezone.utc.utcoffset(dt) or timezone.utc.utcoffset(None)  # type: ignore[arg-type]
     total_seconds = int(offset.total_seconds()) if offset is not None else 0
-    sign = "+" if total_seconds >= 0 else "-"
+    body = (
+        f"D:{dt.year:04d}{dt.month:02d}{dt.day:02d}"
+        f"{dt.hour:02d}{dt.minute:02d}{dt.second:02d}"
+    )
+    # UTC → compact Z (avoids noisy +00'00'). Non-zero offsets keep ±HH'mm'.
+    if total_seconds == 0:
+        return body + "Z"
+    sign = "+" if total_seconds > 0 else "-"
     total_seconds = abs(total_seconds)
     hours, rem = divmod(total_seconds, 3600)
     minutes = rem // 60
-    return (
-        f"D:{dt.year:04d}{dt.month:02d}{dt.day:02d}"
-        f"{dt.hour:02d}{dt.minute:02d}{dt.second:02d}"
-        f"{sign}{hours:02d}'{minutes:02d}'"
-    )
+    return f"{body}{sign}{hours:02d}'{minutes:02d}'"
 
 
 def apply_overrides(
